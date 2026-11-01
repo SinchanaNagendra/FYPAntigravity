@@ -17,6 +17,15 @@ It runs entirely in-process using the BankNode and SecureAggregator classes.
 Run: pytest tests/integration/test_fl_rounds.py -v --tb=short
 """
 
+from fl.bank_node.trainer import LocalTrainer
+from fl.bank_node.evaluator import evaluate
+from fl.secure_agg.masking import encode_fixed_point, decode_fixed_point, FIXED_POINT_SCALE
+from fl.secure_agg.aggregator import SecureAggregator
+from fl.secure_agg.keys import KeyPair, derive_shared_seed
+from fl.models.gaussian_nb import GaussianNBModel
+from fl.models.cnn import CNNModel
+from fl.models.logistic_regression import LogisticRegressionModel
+from fl.balancing.methods import BalancingMethod
 import sys
 import time
 from pathlib import Path
@@ -27,15 +36,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from fl.balancing.methods import BalancingMethod
-from fl.models.logistic_regression import LogisticRegressionModel
-from fl.models.cnn import CNNModel
-from fl.models.gaussian_nb import GaussianNBModel
-from fl.secure_agg.keys import KeyPair, derive_shared_seed
-from fl.secure_agg.aggregator import SecureAggregator
-from fl.secure_agg.masking import encode_fixed_point, decode_fixed_point, FIXED_POINT_SCALE
-from fl.bank_node.evaluator import evaluate
-from fl.bank_node.trainer import LocalTrainer
 
 N_BANKS = 5
 N_FEATURES = 64
@@ -113,7 +113,8 @@ def run_one_round(
             device="cpu",
             random_state=SEED + bank_id,
         )
-        train_result = trainer.train(data["X_train"], data["y_train"], global_params)
+        train_result = trainer.train(
+            data["X_train"], data["y_train"], global_params)
         local_params = trainer.get_parameters()
         results.append((local_params, train_result["n_samples"]))
 
@@ -124,7 +125,8 @@ def run_one_round(
         for bank_id, (local_params, _) in enumerate(results):
             flat = np.concatenate([p.ravel() for p in local_params])
             bank_seeds = {k: v for k, v in all_seeds.items() if bank_id in k}
-            masked = SecureAggregator.apply_mask(bank_id, flat, bank_seeds, flat_size)
+            masked = SecureAggregator.apply_mask(
+                bank_id, flat, bank_seeds, flat_size)
             agg.add_masked_update(bank_id, masked)
         agg_flat = agg.aggregate()
 
@@ -151,8 +153,10 @@ def run_one_round(
     val_metrics = []
     for model, data in zip(models, datasets):
         model.set_parameters(new_global)
-        eval_type = "torch" if model_type in ("logistic_regression", "cnn") else "gnb"
-        m = evaluate(model, data["X_val"], data["y_val"], "val", eval_type, "cpu")
+        eval_type = "torch" if model_type in (
+            "logistic_regression", "cnn") else "gnb"
+        m = evaluate(model, data["X_val"],
+                     data["y_val"], "val", eval_type, "cpu")
         val_metrics.append(m)
 
     return new_global, val_metrics
@@ -166,6 +170,9 @@ class TestFLRoundsLR:
 
     def test_lr_rounds_no_crash(self, bank_datasets):
         """LR: 5 federated rounds complete without exception."""
+        import torch
+        torch.manual_seed(SEED)
+        np.random.seed(SEED)
         models = [LogisticRegressionModel(N_FEATURES) for _ in range(N_BANKS)]
         global_params = models[0].get_parameters()
 
@@ -190,8 +197,10 @@ class TestFLRoundsLR:
         This is the core correctness guarantee.
         """
         rng = np.random.default_rng(99)
-        models_sa = [LogisticRegressionModel(N_FEATURES) for _ in range(N_BANKS)]
-        models_plain = [LogisticRegressionModel(N_FEATURES) for _ in range(N_BANKS)]
+        models_sa = [LogisticRegressionModel(
+            N_FEATURES) for _ in range(N_BANKS)]
+        models_plain = [LogisticRegressionModel(
+            N_FEATURES) for _ in range(N_BANKS)]
 
         # Use the same initial params
         init_params = models_sa[0].get_parameters()
@@ -231,7 +240,8 @@ class TestFLRoundsLR:
 
         for i, p in enumerate(global_params):
             # LR params: (N_FEATURES,) weight + (1,) bias
-            assert p.dtype in (np.float32, np.float64), f"Layer {i}: unexpected dtype {p.dtype}"
+            assert p.dtype in (
+                np.float32, np.float64), f"Layer {i}: unexpected dtype {p.dtype}"
             assert p.ndim <= 2, f"Layer {i}: unexpectedly high-dimensional param"
             # Most importantly: no dimension should be N_SAMPLES_PER_BANK
             for dim in p.shape:
@@ -319,7 +329,8 @@ class TestSecureAggIntegration:
         all_seeds = {}
         for i in range(n_banks):
             for j in range(i + 1, n_banks):
-                seed = derive_shared_seed(keypairs[i], keypairs[j].public_bytes, i, j, "int_test")
+                seed = derive_shared_seed(
+                    keypairs[i], keypairs[j].public_bytes, i, j, "int_test")
                 all_seeds[(i, j)] = seed
 
         total = np.zeros(n_elements, dtype=np.uint64)
@@ -347,14 +358,17 @@ class TestSecureAggIntegration:
         all_seeds = {}
         for i in range(n_banks):
             for j in range(i + 1, n_banks):
-                s = derive_shared_seed(keypairs[i], keypairs[j].public_bytes, i, j, "verify_test")
+                s = derive_shared_seed(
+                    keypairs[i], keypairs[j].public_bytes, i, j, "verify_test")
                 all_seeds[(i, j)] = s
 
-        weights = [rng.uniform(-1, 1, n_elements).astype(np.float32) for _ in range(n_banks)]
+        weights = [rng.uniform(-1, 1, n_elements).astype(np.float32)
+                   for _ in range(n_banks)]
         masked = []
         for bank_id in range(n_banks):
             bank_seeds = {k: v for k, v in all_seeds.items() if bank_id in k}
-            m = SecureAggregator.apply_mask(bank_id, weights[bank_id], bank_seeds, n_elements)
+            m = SecureAggregator.apply_mask(
+                bank_id, weights[bank_id], bank_seeds, n_elements)
             masked.append(m)
 
         # Bank 0 aggregates

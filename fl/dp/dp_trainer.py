@@ -97,15 +97,24 @@ class DPTrainer:
                 "Install with: pip install opacus==1.4.0"
             )
 
+        self.model.train()
         self._optimizer = torch.optim.SGD(self.model.parameters(), lr=self._lr)
         self._privacy_engine = PrivacyEngine()
 
-        # Opacus requires a DataLoader to set up correctly; we create a minimal one
-        dummy_dataset = TensorDataset(
-            torch.zeros(n_samples, self.model.n_features),
-            torch.zeros(n_samples),
+        class SizedDataset(torch.utils.data.Dataset):
+            def __init__(self, size, n_features):
+                self.size = size
+                self.n_features = n_features
+            def __len__(self):
+                return self.size
+            def __getitem__(self, idx):
+                return torch.zeros(self.n_features), torch.zeros(1)
+
+        dummy_loader = DataLoader(
+            SizedDataset(n_samples, self.model.n_features),
+            batch_size=self.batch_size,
+            shuffle=True,
         )
-        dummy_loader = DataLoader(dummy_dataset, batch_size=self.batch_size, shuffle=True)
 
         self.model, self._optimizer, self._dp_loader_template = (
             self._privacy_engine.make_private(

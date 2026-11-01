@@ -150,3 +150,54 @@ FYPKiro/
 ├── docker-compose.yml
 └── Makefile
 ```
+
+
+---
+
+## 6. FabricClient Implementation: peer CLI via docker exec
+
+### Why not a Python Gateway SDK
+
+Hyperledger officially provides Gateway client libraries for Go, Node.js, and
+Java only. The community `fabric-sdk-py` package (v1.0.0, ~2020) does not
+implement the Fabric 2.x Gateway protocol. See `docs/DEVIATIONS.md: DEV-06`.
+
+### How FabricClient works
+
+Each bank runs a CLI container named `cli.bank{N}.fraud.net`. `FabricClient`
+executes commands inside this container via `docker exec`:
+
+```
+Python process                    CLI container
+─────────────                     ────────────────────────────────
+FabricClient._submit("SubmitUpdate", ...)
+  │
+  └── subprocess.run(["docker", "exec", "cli.bank0.fraud.net",
+                       "sh", "-c", "CORE_PEER_* peer chaincode invoke ..."])
+                                          │
+                                          └── peer → peer0.bank0.fraud.net:7051
+                                                   → orderer0:7050
+                                                   → all endorsing peers
+```
+
+Environment variables set per call:
+- `CORE_PEER_LOCALMSPID` — this bank's MSP ID
+- `CORE_PEER_MSPCONFIGPATH` — Admin MSP inside container
+- `CORE_PEER_ADDRESS` — `peer0.bank{N}.fraud.net:{port}`
+- `CORE_PEER_TLS_ENABLED=true`
+- `CORE_PEER_TLS_ROOTCERT_FILE` — peer TLS root cert
+
+Endorsing peers: all N banks included (`--peerAddresses` + `--tlsRootCertFiles`
+repeated N times) to satisfy the majority endorsement policy.
+
+Error handling:
+- `FabricMVCCError` → retry up to 3× with exponential back-off
+- `FabricAccessDeniedError` → raised immediately (identity problem)
+- `FabricError` → all other non-zero exits
+
+### Upgrade path
+
+A Go sidecar using the official `fabric-gateway` library can expose REST
+endpoints for submit / evaluate / event streaming if lower-latency event
+subscription is needed. Switch by setting `FABRIC_CLIENT_MODE=sidecar`.
+This is not built yet; see `docs/DEVIATIONS.md: DEV-06`.

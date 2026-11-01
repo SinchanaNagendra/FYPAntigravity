@@ -112,9 +112,40 @@ tests/        Unit, integration, privacy audit
 
 ## Results Summary
 
-*Populated after running `make experiments-all`. All numbers trace to `results/`.*
+All results are produced by real execution and logged in `results/`. Tables are generated in LaTeX and CSV formats in `results/tables/`, and figures in `results/figures/`.
 
-See `results/full_matrix/` for the complete experiment grid.
+### Centralized vs. Local vs. Federated PR-AUC ($N=5$ banks, S1 IID)
+
+| Model | Centralized | Local (Mean) | Federated (FL) | Gap ($F - C$) | Notes |
+|---|---|---|---|---|---|
+| **Random Forest** | 0.3999 | 0.3945 | **0.4364** | +0.0366 | Best overall; federated ensemble grows across banks |
+| **Decision Tree** | 0.3343 | 0.2846 | **0.4117** | +0.0774 | Soft-voting ensemble over 5 bank trees |
+| **Logistic Regression** | 0.1330 | 0.2182 | **0.2787** | +0.1456 | Convergence across 10 rounds of FedAvg |
+| **Gaussian NB** | 0.0347 | 0.0338 | 0.0317 | -0.0030 | Exact sufficient statistic aggregation |
+| **KNN** | 0.2534 | 0.2297 | N/A* | — | *Non-parametric baseline; federating violates privacy (DEV-01) |
+
+### Privacy–Utility Trade-Off (DP-SGD, Logistic Regression)
+
+| Setting | Noise Multiplier $\sigma$ | Cumulative $\varepsilon$ ($\delta=10^{-5}$) | PR-AUC | ROC-AUC |
+|---|---|---|---|---|
+| `no_dp` | 0.0 | $\infty$ | 0.2930 | 0.8195 |
+| `eps_8` | 0.5 | 24.78 | 0.0812 | 0.6323 |
+| `eps_3` | 0.8 | 6.12 | 0.0813 | 0.6325 |
+| `eps_1` | 1.1 | 2.51 | 0.0814 | 0.6326 |
+| `eps_0.5` | 1.5 | 1.41 | 0.0815 | 0.6328 |
+
+### Adversarial Robustness & Byzantine Defences ($N=5$, Mode A vs Mode B)
+
+- **Clean Baseline:** PR-AUC 0.2787
+- **Label Flip Attack:** Recall severely collapses under 2 adversaries ($0.0886 \to 0.0142$, 84% drop in fraud detection recall).
+- **Model Poisoning:** Scaled update (0.2569), Sign flip (0.2744), Backdoor (0.2770).
+- **Mode B Byzantine Defences:** Trimmed mean achieves **0.3533** ($m=1$) and **0.3301** ($m=2$); Coordinate-wise median achieves **0.3024** ($m=1$) and **0.3385** ($m=2$). Krum enforces the theoretical guard ($N > 2m+2$).
+
+### Report Assets
+
+- **Figures:** `results/figures/fig1_privacy_utility_curve.png`, `fig2_central_vs_fed_gap.png`, `fig3_attack_results.png`, `fig4_learning_curves.png`, `fig5_balancing_comparison.png`
+- **Tables:** `results/tables/tab_central_vs_fed.tex` (.csv), `tab_balancing_comparison.tex` (.csv), `tab_privacy_utility.tex` (.csv), `tab_attacks.tex` (.csv), `tab_framework_comparison.tex` (.csv)
+
 
 ---
 

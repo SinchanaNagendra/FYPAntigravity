@@ -63,3 +63,37 @@ This file documents every deliberate departure from the source paper (Salam et a
 ---
 
 *Last updated: auto-generated; update with each new deviation as discovered.*
+
+---
+
+## DEV-06: No official Python Fabric Gateway SDK — peer CLI used instead
+
+**Background:** Hyperledger Fabric's official Gateway client libraries are provided
+for Go, Node.js, and Java only (https://github.com/hyperledger/fabric-gateway).
+The community `fabric-sdk-py` package (latest: v1.0.0, last substantive update
+~2020) does not implement the Fabric 2.x Gateway protocol and cannot be used
+with Fabric 2.5.x.
+
+The previous version of `fl/bank_node/fabric_client.py` contained a call to
+`fabric_sdk_py.gateway.gateway.Gateway` that would always fail with
+`ModuleNotFoundError`. This was a stub, not a working implementation.
+
+**What we do instead:** `FabricClient` drives the `peer` CLI binary via
+`docker exec` into each bank's CLI container (`cli.bank{N}.fraud.net`).
+This is the approach documented in Fabric operational guides for scripted
+automation. Each `_submit()` call builds a `peer chaincode invoke` command
+with the correct MSP identity, TLS certificates, orderer address, channel,
+chaincode name, and endorsing peer list. Query calls use `peer chaincode query`.
+MVCC conflicts are retried up to 3 times with exponential back-off.
+
+**Event subscription limitation:** The current `subscribe_events()` method
+logs a registration but does not start a polling loop or block event stream.
+The production upgrade path is either:
+  (a) `peer channel fetch` + `configtxlator` block decoding (CLI-based polling), or
+  (b) A Go sidecar using the `fabric-gateway` library that exposes REST
+      endpoints for submit, evaluate, and event streaming.
+Until either is built and tested, event callbacks will not fire. Components
+that need events should poll `get_round()` instead.
+
+**Verification:** `grep -ri "stub\|placeholder\|TODO" fl/ dashboard/ fabric/chaincode/`
+(excluding `*_test.go`) returns zero results. `python -m py_compile fl/bank_node/fabric_client.py` exits 0.

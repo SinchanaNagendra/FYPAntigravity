@@ -13,6 +13,7 @@ Usage:
 """
 
 # --- path setup MUST come before any fl.* imports ---
+import torch
 import argparse
 import json
 import logging

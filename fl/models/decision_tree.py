@@ -91,11 +91,8 @@ class DecisionTreeModel:
             raise RuntimeError("DecisionTreeModel not fitted yet.")
         # Strip leaf counts: overwrite tree_.value with probabilities
         tree_proba = _tree_to_proba_only(self._local_tree)
-        buf = io.BytesIO()
-        pickle.dump(tree_proba, buf)
-        blob = buf.getvalue()
-        # Wrap as 1-D numpy array of uint8 for Flower compatibility
-        return [np.frombuffer(blob, dtype=np.uint8)]
+        # Pack with tree count and length prefix matching _deserialise_forest format
+        return [_serialise_tree_list([tree_proba])]
 
     def set_parameters(self, params: list[np.ndarray]) -> None:
         """

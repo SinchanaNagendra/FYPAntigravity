@@ -135,10 +135,10 @@ func TestStartRound_DuplicateID(t *testing.T) {
 	invoke(t, stub, "RegisterBank", "bank0")
 	invoke(t, stub, "RegisterBank", "bank1")
 	invoke(t, stub, "StartRound", "round1",
-		"QmTestCID", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+		"QmTestCID1234567890abcdef", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 		`{"lr":0.01}`, `["bank0","bank1"]`, "10.0")
 	invokeExpectError(t, stub, "StartRound", "round1",
-		"QmTestCID", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+		"QmTestCID1234567890abcdef", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 		`{"lr":0.01}`, `["bank0","bank1"]`, "10.0")
 }
 
@@ -212,14 +212,14 @@ func TestSubmitUpdate_DuplicateRejected(t *testing.T) {
 
 	stub.Creator = []byte("Bank0MSP")
 	invoke(t, stub, "StartRound", "round1",
-		"QmGlobal", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+		"QmGlobalModel1234567890abc", "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 		`{}`, `["bank0","bank1"]`, "100.0")
 	invoke(t, stub, "SubmitUpdate", "round1", "bank0",
-		"QmUpdate1", "b94f5a5b37a54890e7c7b8e5d57f6c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
+		"QmUpdate11234567890abcdef", "b94f5a5b37a54890e7c7b8e5d57f6c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
 		"102400", "5.0")
 	// Second submission from same bank → error
 	invokeExpectError(t, stub, "SubmitUpdate", "round1", "bank0",
-		"QmUpdate2", "b94f5a5b37a54890e7c7b8e5d57f6c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
+		"QmUpdate21234567890abcdef", "b94f5a5b37a54890e7c7b8e5d57f6c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c",
 		"102400", "5.0")
 }
 
@@ -242,13 +242,13 @@ func TestFullRoundStateMachine(t *testing.T) {
 
 	// StartRound
 	stub.Creator = []byte("Bank0MSP")
-	invoke(t, stub, "StartRound", "r1", "QmGlobal", modelHash, `{}`, `["bank0","bank1"]`, "100.0")
+	invoke(t, stub, "StartRound", "r1", "QmGlobalModel1234567890abc", modelHash, `{}`, `["bank0","bank1"]`, "100.0")
 
 	// Both banks submit updates → quorum reached → AGGREGATING
 	stub.Creator = []byte("Bank0MSP")
-	invoke(t, stub, "SubmitUpdate", "r1", "bank0", "QmUpd0", updateHash, "1000", "3.0")
+	invoke(t, stub, "SubmitUpdate", "r1", "bank0", "QmUpd01234567890abcdef", updateHash, "1000", "3.0")
 	stub.Creator = []byte("Bank1MSP")
-	invoke(t, stub, "SubmitUpdate", "r1", "bank1", "QmUpd1", updateHash, "1000", "4.0")
+	invoke(t, stub, "SubmitUpdate", "r1", "bank1", "QmUpd11234567890abcdef", updateHash, "1000", "4.0")
 
 	data := stub.State[roundKey("r1")]
 	var round Round
@@ -259,7 +259,7 @@ func TestFullRoundStateMachine(t *testing.T) {
 
 	// SubmitAggregate
 	stub.Creator = []byte("Bank0MSP")
-	invoke(t, stub, "SubmitAggregate", "r1", "QmAgg123", aggHash)
+	invoke(t, stub, "SubmitAggregate", "r1", "QmAgg1234567890abcdef", aggHash)
 
 	// Both banks endorse
 	stub.Creator = []byte("Bank0MSP")

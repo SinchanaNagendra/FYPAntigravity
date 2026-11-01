@@ -13,6 +13,7 @@ Usage:
 """
 
 # path setup MUST come before any local imports
+import torch
 import argparse
 import logging
 import sys
@@ -32,7 +33,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 
-def _build_datasets(partitions_base: Path, n_banks: int) -> list:
+def _build_datasets(partitions_base: Path, n_banks: int, subsample: int = None, seed: int = 42) -> list:
     import pandas as pd
     from fl.preprocessing import FraudPreprocessor
     preprocessor = FraudPreprocessor()
@@ -42,6 +43,8 @@ def _build_datasets(partitions_base: Path, n_banks: int) -> list:
         df_tr = pd.read_parquet(d / "train.parquet")
         df_va = pd.read_parquet(d / "val.parquet")
         df_te = pd.read_parquet(d / "test.parquet")
+        if subsample and len(df_tr) > subsample:
+            df_tr = df_tr.sample(n=subsample, random_state=seed + bank_id)
         X_tr, y_tr = preprocessor.transform(df_tr)
         X_va, y_va = preprocessor.transform(df_va)
         X_te, y_te = preprocessor.transform(df_te)
@@ -347,6 +350,8 @@ def main() -> None:
     parser.add_argument("--partitions", default="data/partitions")
     parser.add_argument("--output", default="results/attacks")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--subsample", type=int, default=None, help="Subsample train data for fast run")
+    parser.add_argument("--models", nargs="+", default=["logistic_regression", "cnn"], choices=["logistic_regression", "cnn"])
     args = parser.parse_args()
 
     set_global_seed(args.seed)
@@ -356,10 +361,10 @@ def main() -> None:
         logger.error(f"Partitions not found: {partitions_base}")
         sys.exit(1)
 
-    datasets = _build_datasets(partitions_base, args.n_banks)
+    datasets = _build_datasets(partitions_base, args.n_banks, subsample=args.subsample, seed=args.seed)
     all_results = []
 
-    for model_type in ["logistic_regression", "cnn"]:
+    for model_type in args.models:
         # Label-flip m=1 and m=2
         for m in [1, 2]:
             r = run_label_flip_attack(

@@ -11,6 +11,7 @@ Results are written to results/baselines/{mode}/.
 """
 
 # --- path setup MUST come before any fl.* imports ---
+import torch
 import sys
 import argparse
 import logging

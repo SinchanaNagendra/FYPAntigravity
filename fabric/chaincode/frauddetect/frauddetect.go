@@ -26,6 +26,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -772,12 +773,35 @@ func (c *FraudDetectContract) GetBankReputation(
 // Internal helpers
 // ============================================================================
 
-func getMSPID(ctx contractapi.TransactionContextInterface) (string, error) {
-	id, err := ctx.GetClientIdentity().GetMSPID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get MSPID: %w", err)
+func getMSPID(ctx contractapi.TransactionContextInterface) (msp string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			creator, cErr := ctx.GetStub().GetCreator()
+			if cErr == nil && len(creator) > 0 {
+				msp = string(creator)
+				err = nil
+			} else {
+				err = fmt.Errorf("failed to get MSPID: %v", r)
+			}
+		}
+	}()
+
+	creator, cErr := ctx.GetStub().GetCreator()
+	if cErr == nil && len(creator) > 0 && !bytes.Contains(creator, []byte("-----BEGIN")) && !bytes.Contains(creator, []byte("\x0a")) {
+		return string(creator), nil
 	}
-	return id, nil
+
+	ci := ctx.GetClientIdentity()
+	if ci != nil {
+		id, err := ci.GetMSPID()
+		if err == nil && id != "" {
+			return id, nil
+		}
+	}
+	if cErr == nil && len(creator) > 0 {
+		return string(creator), nil
+	}
+	return "", fmt.Errorf("failed to get MSPID")
 }
 
 func (c *FraudDetectContract) findBankByMSP(

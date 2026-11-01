@@ -233,6 +233,20 @@ class TestDecisionTree:
         np.testing.assert_allclose(
             proba_sums, np.ones_like(proba_sums), atol=1e-5)
 
+    def test_decision_tree_roundtrip_aggregation(self):
+        from fl.strategies.tree_strategy import TreeStrategy
+        X, y = _make_data(n=400, fraud_rate=0.2)
+        m1 = DecisionTreeModel(N_FEATURES)
+        m1.fit(X, y)
+        m2 = DecisionTreeModel(N_FEATURES)
+        m2.fit(X, y)
+        strategy = TreeStrategy(n_banks=2, model_type="decision_tree")
+        agg = strategy.aggregate_fit([(m1.get_parameters(), 200), (m2.get_parameters(), 200)])
+        m_eval = DecisionTreeModel(N_FEATURES)
+        m_eval.set_parameters(agg)
+        proba = m_eval.predict_proba(X[:10])
+        assert proba.shape == (10, 2)
+
 
 # ---------------------------------------------------------------------------
 # Random Forest

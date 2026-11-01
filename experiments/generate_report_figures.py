@@ -182,6 +182,96 @@ def fig_attack_results(results_dir: Path, output_dir: Path) -> None:
     print(f"[figures] Written {out}")
 
 
+def fig_central_vs_fed_gap(results_dir: Path, output_dir: Path) -> None:
+    plt = setup_style()
+    bl_path = results_dir / "baselines" / "centralized" / "S1_seed42.json"
+    if not bl_path.exists():
+        return
+    with open(bl_path) as f:
+        bl_data = json.load(f)
+    central = {}
+    for r in bl_data.get("results", {}).get("rows", []):
+        if r.get("balancing") == "none":
+            central[r["model"]] = r.get("pr_auc", 0)
+
+    import glob
+    fed = {}
+    for f in glob.glob(str(results_dir / "fl" / "*_none_S1_seed42.json")):
+        with open(f) as fp:
+            d = json.load(fp)
+            m = d.get("config", {}).get("model")
+            tests = d.get("results", {}).get("final_test", [])
+            prs = [t.get("pr_auc") for t in tests if t.get("pr_auc") is not None]
+            if prs and m:
+                fed[m] = sum(prs) / len(prs)
+
+    models = [m for m in ["logistic_regression", "gaussian_nb", "decision_tree", "random_forest"] if m in central or m in fed]
+    if not models:
+        return
+
+    c_vals = [central.get(m, 0) for m in models]
+    f_vals = [fed.get(m, 0) for m in models]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(models))
+    width = 0.35
+    ax.bar(x - width/2, c_vals, width, label="Centralized (Pooled)", color="#38bdf8")
+    ax.bar(x + width/2, f_vals, width, label="Federated (Privacy-Preserving)", color="#34d399")
+    ax.set_ylabel("PR-AUC (Test)")
+    ax.set_title("Centralized vs Federated PR-AUC (N=5 banks, S1 IID)")
+    ax.set_xticks(x)
+    ax.set_xticklabels([m.replace("_", " ").title() for m in models])
+    ax.legend()
+    ax.grid(True, alpha=0.2, axis="y")
+    plt.tight_layout()
+    out = output_dir / "fig2_central_vs_fed_gap.png"
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[figures] Written {out}")
+
+
+def fig_balancing_comparison(results_dir: Path, output_dir: Path) -> None:
+    plt = setup_style()
+    local_path = results_dir / "baselines" / "local" / "S1_seed42.json"
+    if not local_path.exists():
+        return
+    with open(local_path) as f:
+        data = json.load(f)
+    rows = data.get("results", {}).get("rows", [])
+    if not rows:
+        return
+
+    # Group PR-AUC by balancing method
+    from collections import defaultdict
+    by_bal = defaultdict(list)
+    for r in rows:
+        bal = r.get("balancing")
+        pr = r.get("pr_auc")
+        if bal and pr is not None:
+            by_bal[bal].append(pr)
+
+    methods = ["none", "weighted", "rus", "ros", "smote", "adasyn", "hybrid"]
+    methods = [m for m in methods if m in by_bal]
+    if not methods:
+        return
+
+    means = [np.mean(by_bal[m]) for m in methods]
+    stds = [np.std(by_bal[m]) for m in methods]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(methods, means, yerr=stds, capsize=5, color="#818cf8", alpha=0.85, edgecolor="#c7d2fe")
+    ax.set_ylabel("Mean PR-AUC across models and banks")
+    ax.set_title("Data Balancing Techniques Comparison (Local splits, S1)")
+    ax.set_xticks(range(len(methods)))
+    ax.set_xticklabels([m.upper() for m in methods])
+    ax.grid(True, alpha=0.2, axis="y")
+    plt.tight_layout()
+    out = output_dir / "fig5_balancing_comparison.png"
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[figures] Written {out}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate report figures")
     parser.add_argument("--results", default="results")
@@ -196,8 +286,10 @@ def main() -> None:
     matplotlib.use("Agg")
 
     fig_privacy_utility(results_dir, output_dir)
-    fig_learning_curves(results_dir, output_dir)
+    fig_central_vs_fed_gap(results_dir, output_dir)
     fig_attack_results(results_dir, output_dir)
+    fig_learning_curves(results_dir, output_dir)
+    fig_balancing_comparison(results_dir, output_dir)
 
     print(f"\n[figures] All figures written to {output_dir}/")
 

@@ -4,6 +4,8 @@ tests/conftest.py
 Shared pytest fixtures used across unit, integration, and privacy audit tests.
 """
 
+# Preload torch on Windows before any other numeric/C libraries to avoid OpenMP DLL conflict
+import torch
 import hashlib
 import json
 import os

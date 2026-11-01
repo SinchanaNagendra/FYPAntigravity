@@ -143,6 +143,15 @@
   ],
   "fl_comparison": [
     {
+      "name": "decision_tree_none_S1_seed42",
+      "model": "decision_tree",
+      "scenario": "S1",
+      "n_rounds": 1,
+      "pr_auc_mean": 0.4117,
+      "pr_auc_std": 0.1014,
+      "roc_auc_mean": 0.8427
+    },
+    {
       "name": "gaussian_nb_none_S1_seed42",
       "model": "gaussian_nb",
       "scenario": "S1",
@@ -309,5 +318,136 @@
       "fraud_rate": 0.4,
       "n_samples": 5
     }
-  ]
+  ],
+  "dp_sweep": [
+    {
+      "model": "logistic_regression",
+      "label": "no_dp",
+      "sigma": 0.0,
+      "cum_epsilon": "\u221e",
+      "delta": 1e-05,
+      "pr_auc": 0.293,
+      "roc_auc": 0.8195
+    },
+    {
+      "model": "logistic_regression",
+      "label": "eps_8",
+      "sigma": 0.5,
+      "cum_epsilon": 24.78,
+      "delta": 1e-05,
+      "pr_auc": 0.0812,
+      "roc_auc": 0.6323
+    },
+    {
+      "model": "logistic_regression",
+      "label": "eps_3",
+      "sigma": 0.8,
+      "cum_epsilon": 6.12,
+      "delta": 1e-05,
+      "pr_auc": 0.0813,
+      "roc_auc": 0.6325
+    },
+    {
+      "model": "logistic_regression",
+      "label": "eps_1",
+      "sigma": 1.1,
+      "cum_epsilon": 2.51,
+      "delta": 1e-05,
+      "pr_auc": 0.0814,
+      "roc_auc": 0.6326
+    },
+    {
+      "model": "logistic_regression",
+      "label": "eps_0.5",
+      "sigma": 1.5,
+      "cum_epsilon": 1.41,
+      "delta": 1e-05,
+      "pr_auc": 0.0815,
+      "roc_auc": 0.6328
+    }
+  ],
+  "attacks": [
+    {
+      "attack": "label_flip",
+      "n_malicious": 1,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.28372420000000004,
+      "mean_recall": 0.08855840000000001
+    },
+    {
+      "attack": "label_flip",
+      "n_malicious": 2,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.29628859999999996,
+      "mean_recall": 0.014166999999999999
+    },
+    {
+      "attack": "model_poison",
+      "poison_type": "scaled",
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.2569498
+    },
+    {
+      "attack": "model_poison",
+      "poison_type": "sign_flip",
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.2744094
+    },
+    {
+      "attack": "model_poison",
+      "poison_type": "backdoor",
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.2770224
+    },
+    {
+      "mode": "B",
+      "robust_method": "median",
+      "n_malicious": 1,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.3023896
+    },
+    {
+      "mode": "B",
+      "robust_method": "median",
+      "n_malicious": 2,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.3385292
+    },
+    {
+      "mode": "B",
+      "robust_method": "trimmed_mean",
+      "n_malicious": 1,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.3532662
+    },
+    {
+      "mode": "B",
+      "robust_method": "trimmed_mean",
+      "n_malicious": 2,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.330121
+    },
+    {
+      "mode": "B",
+      "robust_method": "krum",
+      "n_malicious": 1,
+      "model": "logistic_regression",
+      "mean_pr_auc": 0.2620484
+    },
+    {
+      "mode": "B",
+      "robust_method": "krum",
+      "n_malicious": 2,
+      "model": "logistic_regression",
+      "mean_pr_auc": null,
+      "skipped": "Krum requires n_banks > 2*n_malicious+2; need >6 banks"
+    }
+  ],
+  "test_summary": {
+    "passed": 103,
+    "skipped": 13,
+    "failed": 0,
+    "go_passed": 12,
+    "status": "ALL PASSED"
+  }
 }

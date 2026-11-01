@@ -15,6 +15,7 @@ Usage:
     python experiments/run_dp_sweep.py --n-banks 5 --seed 42 --output results/dp_sweep
 """
 
+import torch
 import argparse
 import logging
 import sys
@@ -89,6 +90,23 @@ def run_dp_experiment(
     accountant = PrivacyAccountant(delta=delta)
     round_records = []
 
+    if use_dp:
+        from fl.dp.dp_trainer import DPTrainer
+        dp_trainers = [
+            DPTrainer(
+                model=models[i],
+                max_grad_norm=max_grad_norm,
+                noise_multiplier=noise_mult,
+                batch_size=batch_size,
+                delta=delta,
+                lr=0.01,
+                device=device,
+            )
+            for i in range(n_banks)
+        ]
+    else:
+        dp_trainers = None
+
     for round_num in range(1, n_rounds + 1):
         round_id = f"r{round_num:03d}"
         keypairs = {i: KeyPair.generate() for i in range(n_banks)}
@@ -108,16 +126,8 @@ def run_dp_experiment(
             n_samples = len(X)
 
             if use_dp:
-                from fl.dp.dp_trainer import DPTrainer
-                dp_trainer = DPTrainer(
-                    model=model,
-                    max_grad_norm=max_grad_norm,
-                    noise_multiplier=noise_mult,
-                    batch_size=batch_size,
-                    delta=delta,
-                    lr=0.01,
-                    device=device,
-                )
+                dp_trainer = dp_trainers[bank_id]
+                dp_trainer.model.train()
                 for epoch in range(n_epochs):
                     dp_trainer.train_epoch(X, y)
                 eps_this_round = min(eps_this_round, dp_trainer.get_epsilon(delta))
@@ -126,8 +136,8 @@ def run_dp_experiment(
                 model.train()
                 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
                 dataset = TensorDataset(
-                    torch.tensor(X, dtype=torch.float32),
-                    torch.tensor(y, dtype=torch.float32),
+                    torch.from_numpy(X).float(),
+                    torch.from_numpy(y).float(),
                 )
                 loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
                 for epoch in range(n_epochs):
@@ -188,11 +198,13 @@ def run_dp_experiment(
             "val_pr_auc_mean": float(np.mean(valid_pr_aucs)) if valid_pr_aucs else None,
             "val_pr_auc_std": float(np.std(valid_pr_aucs)) if valid_pr_aucs else None,
         })
+        eps_str = f"{eps_this_round:.3f}" if (eps_this_round is not None and eps_this_round != float('inf')) else "inf"
+        val_auc_str = f"{round_records[-1]['val_pr_auc_mean']:.4f}" if round_records[-1]['val_pr_auc_mean'] is not None else "N/A"
         logger.info(
             f"[DPSweep] model={model_type}, noise={noise_mult}, "
             f"round={round_num}/{n_rounds}, "
-            f"ε={eps_this_round:.3f if eps_this_round != float('inf') else 'inf'}, "
-            f"PR-AUC={round_records[-1]['val_pr_auc_mean']:.4f}"
+            f"eps={eps_str}, "
+            f"PR-AUC={val_auc_str}"
         )
 
     # Final test eval
@@ -226,6 +238,9 @@ def main() -> None:
     parser.add_argument("--partitions", default="data/partitions")
     parser.add_argument("--output", default="results/dp_sweep")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--models", nargs="+", default=["logistic_regression", "cnn"], choices=["logistic_regression", "cnn"])
+    parser.add_argument("--subsample", type=int, default=None, help="Subsample train data for fast sweep")
+    parser.add_argument("--batch-size", type=int, default=256)
     args = parser.parse_args()
 
     import pandas as pd
@@ -247,6 +262,8 @@ def main() -> None:
         df_train = pd.read_parquet(bank_dir / "train.parquet")
         df_val = pd.read_parquet(bank_dir / "val.parquet")
         df_test = pd.read_parquet(bank_dir / "test.parquet")
+        if args.subsample and len(df_train) > args.subsample:
+            df_train = df_train.sample(n=args.subsample, random_state=args.seed + bank_id)
         X_train, y_train = preprocessor.transform(df_train)
         X_val, y_val = preprocessor.transform(df_val)
         X_test, y_test = preprocessor.transform(df_test)
@@ -260,7 +277,7 @@ def main() -> None:
     output_dir = Path(args.output)
     all_results = []
 
-    for model_type in ["logistic_regression", "cnn"]:
+    for model_type in args.models:
         for noise_setting in NOISE_SETTINGS:
             logger.info(
                 f"\n[DPSweep] === model={model_type}, noise={noise_setting['label']} ==="
@@ -272,7 +289,7 @@ def main() -> None:
                     noise_setting=noise_setting,
                     n_rounds=args.n_rounds,
                     n_epochs=args.n_epochs,
-                    batch_size=256,
+                    batch_size=args.batch_size,
                     max_grad_norm=1.0,
                     delta=DELTA,
                     seed=args.seed,
@@ -288,17 +305,20 @@ def main() -> None:
 
     # Print summary table
     print("\n=== DP Sweep Summary ===")
-    print(f"{'Model':<20} {'Noise':<10} {'Cum-ε':<10} {'PR-AUC':<10} {'ROC-AUC':<10}")
+    print(f"{'Model':<20} {'Noise':<10} {'Cum-eps':<10} {'PR-AUC':<10} {'ROC-AUC':<10}")
     print("-" * 60)
     for r in all_results:
         if "error" in r:
             continue
         cum_eps = r.get("privacy_summary", {}).get("cumulative_epsilon")
-        cum_eps_str = f"{cum_eps:.2f}" if cum_eps is not None else "∞"
+        cum_eps_str = f"{cum_eps:.2f}" if cum_eps is not None else "inf"
+        pr_val = r.get("final_test_pr_auc_mean")
+        pr_str = f"{pr_val:.4f}" if pr_val is not None else "N/A"
+        roc_val = r.get("final_test_roc_auc_mean")
+        roc_str = f"{roc_val:.4f}" if roc_val is not None else "N/A"
         print(
             f"{r['model']:<20} {r['noise_label']:<10} {cum_eps_str:<10} "
-            f"{r.get('final_test_pr_auc_mean', 'N/A')!s:<10} "
-            f"{r.get('final_test_roc_auc_mean', 'N/A')!s:<10}"
+            f"{pr_str:<10} {roc_str:<10}"
         )
 
     print(f"\nResults written to: {output_dir}/dp_sweep_seed{args.seed}.json")
